@@ -1,5 +1,14 @@
 # leitor-yuv
-trabalho de ippd
+
+## Compilando:
+
+gcc leitor.c -o leitor
+./ leitor
+
+(sem paralelismo por hora)
+(requer arquivo "video_converted_640x360.yuv" no diretório)
+
+## Especificação do trabalho
 
 Trabalhos em grupos de até 4 indivíduos
 Implementação em OpenMP
