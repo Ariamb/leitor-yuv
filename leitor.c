@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <omp.h>
 
 struct resultadoBloco {   
   int diferenca;
@@ -9,14 +10,21 @@ struct resultadoBloco {
   int posy;
 };
 
+const int readingThreads = 24; // a quantia de tasks/threads usadas
+
+const int fileLength = 120;
+const int framesChunk = fileLength/readingThreads;
  
+
 int compara(int bloco0[8][8], int blocoframe[8][8]);
+void leFrames(uint8_t pixel[120][360][640], int i, int max, FILE* arquivo);
 
 
 int main()
 {
  
     FILE* video;
+
     //FILE* bytefind;
 
     int i = 0, j = 0, k = 0;
@@ -34,49 +42,106 @@ int main()
     //além disso, temos os blocos cb e cr: duas matrizes 320x180 cada. Tamanho 120*180*320
     //no total, essas posições ocupam 115200 bytes: 180*320*2, que devem ser compensados na leitura
 
-    int resolucao[] = {120,360,640}; //frames x altura x largura
+    int resolucao[] = {fileLength,360,640}; //frames x altura x largura
     
     //gambiarras pra uso de um espaço de memória contigua (precisa ser contiguo pra funcionar em mpi dps):
     uint8_t (*pixel)[resolucao[1]][resolucao[2]] = calloc(resolucao[0], sizeof(*pixel));
-    video = fopen("video_converted_640x360.yuv", "r");
-    //bytefind = fopen("video_converted_640x360.yuv", "r");
-    //bytefind = fseek(bytefind, 0, SEEK_END);
+    
+    uint8_t (*pixel8)[resolucao[1]][resolucao[2]] = calloc(resolucao[0], sizeof(*pixel8)); //para benchmark
 
-    // lê toda a matriz Y
-    // em seguida, lê as duas matrizes cb e cr
-    // skip de 115200 posições
+
+    // DUAS IMPLEMENTAÇÕES POSSÍVEIS: ESCOLHAM
+    // USANDO PARALLEL FOR OU USANDO TASKS/TASKWAIT
+    // ps: a implementação que for feita primeiro pode ser mais lenta (caching e talz)
+
+    double start;
+    double end;
+    
+    omp_set_num_threads(readingThreads);
+
+    start = omp_get_wtime();
+    #pragma omp parallel shared(pixel) 
+    #pragma omp single
+    {
+        for(i = 0; i < readingThreads; i++){
+            #pragma omp task
+            {
+                leFrames(pixel, i * framesChunk, i * framesChunk + framesChunk, video);
+            }
+        }
+    }
+    #pragma omp taskwait
+    end = omp_get_wtime();
+    printf("tempo com tasks é %f \n", end-start);
+    
+    start = omp_get_wtime();
+    #pragma omp parallel for 
+        for (int i = 0; i < readingThreads; i++)
+        {
+            leFrames(pixel8, i * framesChunk, i * framesChunk + framesChunk, video);
+        }
+    end = omp_get_wtime();
+    printf("tempo resultante do parallel for: %f \n", end-start);
+
+
+
+    //usando leitura linear como controle
+    uint8_t (*pixel2)[resolucao[1]][resolucao[2]] = calloc(resolucao[0], sizeof(*pixel2));
+    FILE* video2 = fopen("video_converted_640x360.yuv", "r");
+
+    start = omp_get_wtime();
+    for(i = 0; i < 120; i++){
+        for(j = 0; j < 360; j++)
+            for(k = 0; k < 640; k++)
+                pixel2[i][j][k] = fgetc(video2);
+        
+        fseek(video2, 180*320*2, SEEK_CUR); // compensa crominância
+    }
+    end = omp_get_wtime();
+    printf("tempo resultante da leitura sequencial: %f \n", end-start);
+
+    //checa se existem erros na leitura, comparando com o single-thread
+    int erros = 0;
+    #pragma omp parallel for collapse(3)
     for(i = 0; i < 120; i++){
         for(j = 0; j < 360; j++){
             for(k = 0; k < 640; k++){
-                byte = fgetc(video);
-                pixel[i][j][k] = byte;
-            }
+                if(pixel2[i][j][k] != pixel[i][j][k])
+                    erros++;
+                if(pixel8[i][j][k] != pixel[i][j][k])
+                    erros++;
+
+            }   
         }
-        fseek(video, 180*320*2, SEEK_CUR); // compensa crominância
     }
-
-    // não fiz isso paralelamente por causa da forma que o fgetc funciona
-    // MAS da pra fazer isso paralelamente. 
-    // Pra isso, da pra abrir o mesmo arquivo com fopen um número de vezes igual o numero de threads
-    // cada ponteiro do fopen aponta pra um lugar diferente
-    // com fseek(), da pra pular a posição que cada ponteiro aponta
-    // e da pra definir margens de até onde é lido
-    // depois essas leituras quebradas são juntadas.
-    // com uma boa aritmética e uns mutex da vida (que o openmp abstrai), da pra fazer isso rodar paralelo
-
-    fclose(video);
-
-
-
+    printf("ERROS: %d \n", erros);
 
 
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
-
  
     return 0;
 }
 
-int compara(int bloco0[8][8], int blocoframe[8][8]){
+
+void leFrames(uint8_t pixel[120][360][640], int i, int max, FILE* arquivo){
+    arquivo = fopen("video_converted_640x360.yuv", "r");
+
+    fseek(arquivo, i*(640*360 + 320*180*2), SEEK_SET);
+
+    int j = 0, k = 0;
+    for(; i < max; i++){
+        for(j = 0; j < 360; j++)
+            for(k = 0; k < 640; k++)
+                pixel[i][j][k] = fgetc(arquivo);
+        
+        fseek(arquivo, 180*320*2, SEEK_CUR); // compensa crominância
+    }
+
+    fclose(arquivo);
+
+}
+
+int compara(int bloco0[8][8], int blocoframe[8][8]){ // heurística de comparação de blocos
 
     int r;
     int diff = 0;

@@ -2,11 +2,11 @@
 
 ## Compilando:
 
-gcc leitor.c -o leitor
+gcc -fopenmp leitor.c -lpthread -o leitor
 
 ./ leitor
 
-(sem paralelismo por hora)
+(Paralelismo adicionado na leitura. Deixo para vocês escolherem qual das formas é pra usar)
 
 (requer arquivo "video_converted_640x360.yuv" no diretório)
 
