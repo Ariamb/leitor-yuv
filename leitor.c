@@ -16,10 +16,10 @@ const int fileLength = 120;
 const int framesChunk = fileLength/readingThreads;
  
 
-int compara(int bloco0[8][8], int blocoframe[8][8]);
+int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q);
 void leFrames(uint8_t pixel[120][360][640], int i, int max);
 
-struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640]);
+struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame);
 
 
 int main()
@@ -42,15 +42,10 @@ int main()
     int resolucao[] = {fileLength,360,640}; //frames x altura x largura
     
     //gambiarras pra uso de um espaço de memória contigua (precisa ser contiguo pra funcionar em mpi dps):
-    
+
     uint8_t (*pixel)[resolucao[1]][resolucao[2]] = calloc(resolucao[0], sizeof(*pixel));
-
-
-    // DUAS IMPLEMENTAÇÕES POSSÍVEIS: ESCOLHAM
-    // USANDO PARALLEL FOR OU USANDO TASKS/TASKWAIT
-    // ps: a implementação que for feita primeiro pode ser mais lenta (caching e talz)
-
     double start;
+
     double end;
     
     omp_set_num_threads(readingThreads);
@@ -62,13 +57,15 @@ int main()
             leFrames(pixel, i * framesChunk, i * framesChunk + framesChunk);
         }
     end = omp_get_wtime();
-    printf("tempo resultante do parallel for: %f \n", end-start);
+    //printf("tempo resultante do parallel for: %f \n", end-start);
 
-
-    //full search alchemist
-
-
-
+    //----------------full search alchemist---------------------
+   
+    struct resultadoBloco (*framesVideo) = buscaCompleta(pixel, 1);
+    printf("tem isso no array: %d", framesVideo[0].posx);
+    for(int i = 0; i < 45; i++){
+        printf("x: %d, y: %d, diff: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
+    }
 
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
  
@@ -94,26 +91,64 @@ void leFrames(uint8_t pixel[120][360][640], int i, int max){
 
 }
 
-int compara(int bloco0[8][8], int blocoframe[8][8]){ // heurística de comparação de blocos
+// heurística de comparação de sem usar novas variaveis
+int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q){ 
 
-    int r;
     int diff = 0;
-    #pragma omp parallel for collapse(2)
     for(int i = 0; i < 8; i++){
         for(int j = 0; j < 8; j++){
-            diff += abs(blocoframe[i][j] - bloco0[i][j]);
+            diff += abs(frames[0][x+i][y+j] - frames[frame][p+i][q+j]);
+            //escolher um cálculo melhor em vez de só acumular a diferença?
         }   
     }
-
-
     return diff;
 }
 
-struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640]){
+
+
+struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
 
     int resolucao = 3600;
 
+    struct resultadoBloco melhorBloco;
+    //aqui cabem os dados de um unico frame ((360/8)*(630/8))
     struct resultadoBloco (*framesVideo) = calloc(resolucao, sizeof(struct resultadoBloco *));
 
-    
+    //cada frame tem 45*80 blocos compactáveis
+    //num frame, cada bloco vai fazer uma busca em até 352*632 blocos
+    //então vamos term 45*80*352*632 testes nesse for
+    //800870400 iterações
+    //800 MILHÕES de iterações
+    //acho que tem alguma coisa errada aqui, na moral
+    int aux, posArray = 0, totalIteracoes = 0;
+    for(int p = 0; p < 45; p++){
+        for(int q = 0; q < 1; q++){ //botei um limitador pra n pegar fogo no pc
+            for(int i = 0; i <= 360-8; i++){
+                for(int j = 0; j <= 640-8; j++){
+                    totalIteracoes++;
+                    aux = compara(frames, frame, i, j, p * 8, q * 8);
+                    if(aux < melhorBloco.diferenca){
+                        melhorBloco.diferenca = aux;
+                        melhorBloco.posx = i;
+                        melhorBloco.posy = j;
+                    }
+                    if(melhorBloco.diferenca == 0){
+                        break;
+                    }
+                }
+                if(melhorBloco.diferenca == 0){
+                    break;
+                }
+            }
+        //printf("funcionando");
+        framesVideo[posArray] = melhorBloco;
+        posArray++;
+        }
+    }
+    printf("total de entradas no array: %d \n", posArray);
+    printf("total de testes: %d \n", totalIteracoes);
+
+    //framesVideo[0] primeiro bloco
+    //framesVIdeo[3600] ultimo bloco
+    return framesVideo;
 }
