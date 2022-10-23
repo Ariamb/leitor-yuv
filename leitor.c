@@ -62,9 +62,23 @@ int main()
     //----------------full search alchemist---------------------
    
     struct resultadoBloco (*framesVideo) = buscaCompleta(pixel, 1);
-    printf("tem isso no array: %d", framesVideo[0].posx);
-    for(int i = 0; i < 45; i++){
-        printf("x: %d, y: %d, diff: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
+    //printf("tem isso no array: %d", framesVideo[0].posx);
+    for(int i = 0; i < 2; i++){
+        printf("bloco que eu quero: \n");
+        for(int j = 0; j < 8; j++){
+            for(int k = 0; k < 8; k++){
+                printf("%d ", pixel[0][j + i * 8][k]);
+            }
+            printf("\n");
+        }
+        printf("stats do bloco que achei: \n x: %d, y: %d, diff: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
+        printf("bloco que achei: \n");
+        for(int j = 0; j < 8; j++){
+            for(int k = framesVideo[i].posy; k < 8; k++){
+                printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
+            }
+            printf("\n");
+        }        
     }
 
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
@@ -105,7 +119,7 @@ int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q
 }
 
 
-
+//119
 struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
 
     int resolucao = 3600;
@@ -122,11 +136,12 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     //acho que tem alguma coisa errada aqui, na moral
     int aux, posArray = 0, totalIteracoes = 0;
     for(int p = 0; p < 45; p++){
-        for(int q = 0; q < 1; q++){ //botei um limitador pra n pegar fogo no pc
-            for(int i = 0; i <= 360-8; i++){
-                for(int j = 0; j <= 640-8; j++){
-                    totalIteracoes++;
-                    aux = compara(frames, frame, i, j, p * 8, q * 8);
+        for(int q = 0; q < 80; q++){
+            melhorBloco.diferenca = 99999;
+            for(int i = 0; i <= 640-8; i++){ //<=360-8
+                for(int j = 0; j <= 360-8; j++){ //<=640-8
+
+                    aux = compara(frames, frame, i, j, p * 8, q * 8); //canto superior esquerdo
                     if(aux < melhorBloco.diferenca){
                         melhorBloco.diferenca = aux;
                         melhorBloco.posx = i;
