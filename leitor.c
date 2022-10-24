@@ -18,7 +18,7 @@ const int framesChunk = fileLength/readingThreads;
 
 int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q);
 void leFrames(uint8_t pixel[120][360][640], int i, int max);
-
+void escreveArquivo(uint8_t pixel[120][360][640]);
 struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame);
 
 
@@ -50,6 +50,8 @@ int main()
     
     omp_set_num_threads(readingThreads);
 
+
+
     start = omp_get_wtime();
     #pragma omp parallel for 
         for (int i = 0; i < readingThreads; i++)
@@ -57,10 +59,20 @@ int main()
             leFrames(pixel, i * framesChunk, i * framesChunk + framesChunk);
         }
     end = omp_get_wtime();
+
+
+
+    for(i = 0; i < 8; i++){
+        for(j = 0; j < 8; j++){
+            printf("%d ", pixel[0][i][j]);
+        }
+        printf("\n");
+    }
+
     //printf("tempo resultante do parallel for: %f \n", end-start);
 
     //----------------full search alchemist---------------------
-   
+   /*
     struct resultadoBloco (*framesVideo) = buscaCompleta(pixel, 1);
     //printf("tem isso no array: %d", framesVideo[0].posx);
     for(int i = 0; i < 2; i++){
@@ -80,7 +92,8 @@ int main()
             printf("\n");
         }        
     }
-
+    */
+    escreveArquivo(pixel);
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
  
     return 0;
@@ -166,4 +179,37 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     //framesVideo[0] primeiro bloco
     //framesVIdeo[3600] ultimo bloco
     return framesVideo;
+}
+
+
+
+void escreveArquivo(uint8_t frames[120][360][640]){//, struct resultadoBloco blocos[119][3600]){
+    FILE* arquivo = fopen("video_comprimido.yuv", "w"); //n adianta ser .yuv
+
+    if(arquivo == NULL){
+        printf("arquivo não pode ser criado\n");
+        return;
+    }
+    uint8_t chromaFalsa = 0;
+
+
+    for(int i = 0; i < 360; i++){
+        for(int j = 0; j < 640; j++){
+            fwrite(&frames[0][i][j], sizeof(uint8_t), 1, arquivo);
+        }
+    }
+    //precisa escrever crominancia pra funcionar!
+    for(int i = 0; i < 180; i++){
+        for(int j = 0; j < 320; j++){
+            fwrite(&chromaFalsa, sizeof(uint8_t), 1, arquivo);
+        }
+    }
+    for(int i = 0; i < 180; i++){
+        for(int j = 0; j < 320; j++){
+            fwrite(&chromaFalsa, sizeof(uint8_t), 1, arquivo);
+        }
+    }
+
+
+    return;
 }
