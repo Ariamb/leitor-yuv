@@ -66,34 +66,34 @@ int main()
     //----------------full search alchemist---------------------
    
     struct resultadoBloco (*framesVideo) = buscaCompleta(pixel, 1);
-    //printf("tem isso no array: %d", framesVideo[0].posx);
-        for(int i = 0; i < 3; i++){
-            printf("esse é a MELHOR POSIÇÃO ENCONTRADA PRO BLOCO %d do FRAME 1 \n", i);
-            printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 1: \n", i);
-            printf("\n");
+    // printf("tem isso no array: %d", framesVideo[0].posx);
+    for(int i = 0; i < 3; i++){
+        printf("esse é a MELHOR POSIÇÃO ENCONTRADA PRO BLOCO %d do FRAME 1 \n", i);
+        printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 1: \n", i);
+        printf("\n");
 
-            for(int j = 0; j < 8; j++){//x
-                for(int k = 0; k < 8; k++){//y
-                    printf("%d ", pixel[1][j][k + i * 8]);
-                }
-                printf("\n");
-            }        
-            printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 0: \n", i);
-            for(int j = 0; j < 8; j++){
-                for(int k = 0; k < 8; k++){
-                    printf("%d ", pixel[0][j][k + i * 8]);
-                }
-                printf("\n");
+        for(int j = 0; j < 8; j++){//x
+            for(int k = 0; k < 8; k++){//y
+                printf("%d ", pixel[1][j][k + i * 8]);
             }
-            printf("ESSE É O BLOCO QUE MELHOR REPRESENTA O BLOCO %d DO FRAME 1 \n", i);
-            printf("O MELHOR BLOCO FICA AQUI Ó: X: %d, Y: %d, differenca: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
-            for(int j = 0; j < 8; j++){
-                for(int k = 0; k < 8; k++){
-                    printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
-                }
-                printf("\n");
-            }        
+            printf("\n");
+        }        
+        printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 0: \n", i);
+        for(int j = 0; j < 8; j++){
+            for(int k = 0; k < 8; k++){
+                printf("%d ", pixel[0][j][k + i * 8]);
+            }
+            printf("\n");
         }
+        printf("ESSE É O BLOCO QUE MELHOR REPRESENTA O BLOCO %d DO FRAME 1 \n", i);
+        printf("O MELHOR BLOCO FICA AQUI Ó: X: %d, Y: %d, differenca: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
+        for(int j = 0; j < 8; j++){
+            for(int k = 0; k < 8; k++){
+                printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
+            }
+            printf("\n");
+        }        
+    }
     
     //escreveArquivo(pixel);
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
@@ -122,11 +122,13 @@ void leFrames(uint8_t pixel[120][360][640], int i, int max){
 
 // heurística de comparação de sem usar novas variaveis
 int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q){ 
+    //frames, frame a comparar, pixel vertical, pixel horizontal, deslocamento de bloco vertical. deslocamento de bloco horizontal
 
     int diff = 0;
     for(int i = 0; i < 8; i++){
         for(int j = 0; j < 8; j++){
             diff += abs(frames[0][x+i][y+j] - frames[frame][p+i][q+j]);
+            //desloca pixel no frame de referencia e bloco no frame a comparar
             //escolher um cálculo melhor em vez de só acumular a diferença?
         }   
     }
@@ -141,7 +143,7 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
 
     struct resultadoBloco melhorBloco;
     //aqui cabem os dados de um unico frame ((360/8)*(630/8))
-    struct resultadoBloco (*framesVideo) = calloc(resolucao, sizeof(struct resultadoBloco *));
+    struct resultadoBloco (*framesVideo) = calloc(resolucao, sizeof(struct resultadoBloco));
 
     //cada frame tem 45*80 blocos compactáveis
     //num frame, cada bloco vai fazer uma busca em até 352*632 blocos
@@ -150,13 +152,14 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     //800 MILHÕES de iterações
     //acho que tem alguma coisa errada aqui, na moral
     int aux, posArray = 0, totalIteracoes = 0;
-    for(int p = 0; p < 45; p++){
-        for(int q = 0; q < 80; q++){
+    for(int p = 0; p < 45; p++){//vertical
+        for(int q = 0; q < 80; q++){//horizontal
             melhorBloco.diferenca = 99999;
-            for(int i = 0; i <= 360-8; i++){ //<=360-8 //i<= 632
-                for(int j = 0; j <= 640-8; j++){ //<=640-8
+            for(int i = 0; i <= 360-8; i++){ //<=360-8 //i<= 632 vertical
+                for(int j = 0; j <= 640-8; j++){ //<=640-8 horizontal
 
                     aux = compara(frames, frame, i, j, p * 8, q * 8); //canto superior esquerdo
+                    //frames gerais, frame a comparar, pixel vertical, pixel horizontal, deslocamento de bloco vertical, deslocamento de bloco horizontal
                     if(aux < melhorBloco.diferenca){
                         melhorBloco.diferenca = aux;
                         melhorBloco.posx = i;
