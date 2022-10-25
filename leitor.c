@@ -27,12 +27,12 @@ int compare_block(
 );
 
 void read_file(
-    uint8_t raw_video[frames_total][height][width], 
+    uint8_t raw_frames[frames_total][height][width], 
     int i, 
     int max
 );
 
-void write_file(uint8_t raw_video[frames_total][height][width]);
+void write_file(uint8_t raw_frames[frames_total][height][width]);
 
 struct node * full_search(
     uint8_t frames[frames_total][height][width], 
@@ -47,7 +47,7 @@ int main() {
         no total, essas posições ocupam 115200 bytes: 180*320*2, que devem ser compensados na leitura 
     */
 
-    uint8_t (*raw_video)[height][width] = calloc(frames_total, sizeof(*raw_video));
+    uint8_t (*raw_frames)[height][width] = calloc(frames_total, sizeof(*raw_frames));
     
     omp_set_num_threads(num_threads);
 
@@ -55,7 +55,7 @@ int main() {
     #pragma omp parallel for 
         for (int i = 0; i < num_threads; i++) {
             read_file(
-                raw_video, 
+                raw_frames, 
                 i * frames_chunk,
                 i * frames_chunk + frames_chunk
             );
@@ -68,16 +68,16 @@ int main() {
     
     #pragma omp parallel for 
     for(int i = 1; i < frames_total; i++) {
-        best_frames[i-1] = full_search(raw_video, i);
+        best_frames[i-1] = full_search(raw_frames, i);
     }
 
-    free(raw_video);
+    free(raw_frames);
  
     return 0;
 }
 
 
-void read_file(uint8_t raw_video[frames_total][height][width], int i, int max){
+void read_file(uint8_t raw_frames[frames_total][height][width], int i, int max){
     FILE* file = fopen(video_name, "r");
 
     fseek(
@@ -86,12 +86,10 @@ void read_file(uint8_t raw_video[frames_total][height][width], int i, int max){
         SEEK_SET
     );
 
-    int j = 0, k = 0;
-
     for(; i < max; i++){
-        for(j = 0; j < height; j++)
-            for(k = 0; k < width; k++)
-                raw_video[i][j][k] = fgetc(file);
+        for(int j = 0; j < height; j++)
+            for(int k = 0; k < width; k++)
+                raw_frames[i][j][k] = fgetc(file);
         
         /* Crominância */
         fseek(
@@ -105,76 +103,81 @@ void read_file(uint8_t raw_video[frames_total][height][width], int i, int max){
 
 }
 
-int compare_block(uint8_t frames[frames_total][height][width], int frame, int x, int y, int p, int q) { 
-    //frames, frame a comparar, pixel vertical, pixel horizontal, deslocamento de bloco vertical. deslocamento de bloco horizontal
+int compare_block(
+    uint8_t frames[frames_total][height][width], 
+    int frame, 
+    int pixel_x, 
+    int pixel_y, 
+    int vertical, 
+    int horizontal
+    ) { 
 
     int diff = 0;
 
     for(int row = 0; row < 8; row++) {
         for(int col = 0; col < 8; col++) {
-            diff += abs(frames[0][x + row][y + col] - frames[frame][p + row][q + col]);
+            diff += abs(frames[0][pixel_x + row][pixel_y + col] - frames[frame][vertical + row][horizontal + col]);
         }   
     }
 
     return diff;
 }
 
-struct node * full_search(uint8_t frames[frames_total][height][width], int frame){
+struct node * full_search(uint8_t frames[frames_total][height][width], int frame) {
 
-    int resolucao = 3600;
+    int resolution = 3600;
 
-    struct node melhorBloco;
+    struct node best_block;
+
     //aqui cabem os dados de um unico frame ((height/8)*(630/8))
-    struct node (*framesVideo) = calloc(resolucao, sizeof(struct node));
+    struct node (*frames_video) = calloc(resolution, sizeof(struct node));
 
-    //cada frame tem 45*80 blocos compactáveis
-    //num frame, cada bloco vai fazer uma busca em até 352*632 blocos
-    //então vamos term 45*80*352*632 testes nesse for
-    //800870400 iterações
-    //800 MILHÕES de iterações
-    //acho que tem alguma coisa errada aqui, na moral
     int aux, posArray = 0;
+    
     printf("comecei a executar o frame %d \n", frame);
-    for(int p = 0; p < 45; p++){//vertical
-        for(int q = 0; q < 80; q++){//horizontal
-            melhorBloco.diff = 99999;
-            for(int i = 0; i <= height-8; i++){ //<=height-8 //i<= 632 vertical
-                for(int j = 0; j <= width-8; j++){ //<=width-8 horizontal
 
-                    aux = compare_block(frames, frame, i, j, p * 8, q * 8); //canto superior esquerdo
-                    //frames gerais, frame a comparar, pixel vertical, pixel horizontal, deslocamento de bloco vertical, deslocamento de bloco horizontal
-                    if(aux < melhorBloco.diff){
-                        melhorBloco.diff = aux;
-                        melhorBloco.x = i;
-                        melhorBloco.y = j;
+    for (int vertical = 0; vertical < 45; vertical++) {
+
+        for (int horizontal = 0; horizontal < 80; horizontal++) {
+
+            best_block.diff = 99999;
+
+            for (int x = 0; x <= height-8; x++) { 
+
+                for (int y = 0; y <= width-8; y++){ 
+
+                    aux = compare_block(frames, frame, x, y, vertical * 8, horizontal * 8); 
+
+                    if (aux < best_block.diff) {
+                        best_block.diff = aux;
+                        best_block.x = x;
+                        best_block.y = y;
                     }
-                    if(melhorBloco.diff == 0){
+
+                    if (best_block.diff == 0) {
                         break;
                     }
                 }
-                if(melhorBloco.diff == 0){
+
+                if (best_block.diff == 0) {
                     break;
                 }
             }
-        //printf("funcionando");
-        //printf("achei o bloco no %d %d do frame %d \n", p, q, frame);
-        framesVideo[posArray] = melhorBloco;
+
+        frames_video[posArray] = best_block;
+
         posArray++;
+        
         }
     }
-    //framesVideo[0] primeiro bloco
-    //framesVideo[80] ultimo bloco da primeira linha
-    //framesVideo[80] primeiro bloco da primeira linha
-    //framesVIdeo[3600] ultimo bloco
+
     printf("terminei de executar o frame %d \n", frame);
 
-    return framesVideo;
+    return frames_video;
 }
 
-
-
-void write_file(uint8_t frames[frames_total][height][width]){//, struct node blocos[119][3600]){
-    FILE* file = fopen("video_comprimido.yuv", "w"); //n adianta ser .yuv
+void write_file(uint8_t frames[frames_total][height][width]) {
+    FILE* file = fopen("video_comprimido.yuv", "w"); 
 
     if(file == NULL){
         printf("arquivo não pode ser criado\n");
