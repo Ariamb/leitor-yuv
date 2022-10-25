@@ -18,7 +18,7 @@ const int framesChunk = fileLength/readingThreads;
 
 int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q);
 void leFrames(uint8_t pixel[120][360][640], int i, int max);
-
+void escreveArquivo(uint8_t pixel[120][360][640]);
 struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame);
 
 
@@ -50,6 +50,8 @@ int main()
     
     omp_set_num_threads(readingThreads);
 
+
+
     start = omp_get_wtime();
     #pragma omp parallel for 
         for (int i = 0; i < readingThreads; i++)
@@ -57,30 +59,43 @@ int main()
             leFrames(pixel, i * framesChunk, i * framesChunk + framesChunk);
         }
     end = omp_get_wtime();
+
+
     //printf("tempo resultante do parallel for: %f \n", end-start);
 
     //----------------full search alchemist---------------------
    
     struct resultadoBloco (*framesVideo) = buscaCompleta(pixel, 1);
     //printf("tem isso no array: %d", framesVideo[0].posx);
-    for(int i = 0; i < 2; i++){
-        printf("bloco que eu quero: \n");
-        for(int j = 0; j < 8; j++){
-            for(int k = 0; k < 8; k++){
-                printf("%d ", pixel[0][j + i * 8][k]);
-            }
+        for(int i = 0; i < 3; i++){
+            printf("esse é a MELHOR POSIÇÃO ENCONTRADA PRO BLOCO %d do FRAME 1 \n", i);
+            printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 1: \n", i);
             printf("\n");
-        }
-        printf("stats do bloco que achei: \n x: %d, y: %d, diff: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
-        printf("bloco que achei: \n");
-        for(int j = 0; j < 8; j++){
-            for(int k = framesVideo[i].posy; k < 8; k++){
-                printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
-            }
-            printf("\n");
-        }        
-    }
 
+            for(int j = 0; j < 8; j++){//x
+                for(int k = 0; k < 8; k++){//y
+                    printf("%d ", pixel[1][j][k + i * 8]);
+                }
+                printf("\n");
+            }        
+            printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 0: \n", i);
+            for(int j = 0; j < 8; j++){
+                for(int k = 0; k < 8; k++){
+                    printf("%d ", pixel[0][j][k + i * 8]);
+                }
+                printf("\n");
+            }
+            printf("ESSE É O BLOCO QUE MELHOR REPRESENTA O BLOCO %d DO FRAME 1 \n", i);
+            printf("O MELHOR BLOCO FICA AQUI Ó: X: %d, Y: %d, differenca: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
+            for(int j = 0; j < 8; j++){
+                for(int k = 0; k < 8; k++){
+                    printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
+                }
+                printf("\n");
+            }        
+        }
+    
+    //escreveArquivo(pixel);
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
  
     return 0;
@@ -138,8 +153,8 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     for(int p = 0; p < 45; p++){
         for(int q = 0; q < 80; q++){
             melhorBloco.diferenca = 99999;
-            for(int i = 0; i <= 640-8; i++){ //<=360-8
-                for(int j = 0; j <= 360-8; j++){ //<=640-8
+            for(int i = 0; i <= 360-8; i++){ //<=360-8 //i<= 632
+                for(int j = 0; j <= 640-8; j++){ //<=640-8
 
                     aux = compara(frames, frame, i, j, p * 8, q * 8); //canto superior esquerdo
                     if(aux < melhorBloco.diferenca){
@@ -162,8 +177,42 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     }
     printf("total de entradas no array: %d \n", posArray);
     printf("total de testes: %d \n", totalIteracoes);
-
     //framesVideo[0] primeiro bloco
+    //framesVideo[80] ultimo bloco da primeira linha
+    //framesVideo[80] primeiro bloco da primeira linha
     //framesVIdeo[3600] ultimo bloco
     return framesVideo;
+}
+
+
+
+void escreveArquivo(uint8_t frames[120][360][640]){//, struct resultadoBloco blocos[119][3600]){
+    FILE* arquivo = fopen("video_comprimido.yuv", "w"); //n adianta ser .yuv
+
+    if(arquivo == NULL){
+        printf("arquivo não pode ser criado\n");
+        return;
+    }
+    uint8_t chromaFalsa = 0;
+
+
+    for(int i = 0; i < 360; i++){
+        for(int j = 0; j < 640; j++){
+            fwrite(&frames[0][i][j], sizeof(uint8_t), 1, arquivo);
+        }
+    }
+    //precisa escrever crominancia pra funcionar!
+    for(int i = 0; i < 180; i++){
+        for(int j = 0; j < 320; j++){
+            fwrite(&chromaFalsa, sizeof(uint8_t), 1, arquivo);
+        }
+    }
+    for(int i = 0; i < 180; i++){
+        for(int j = 0; j < 320; j++){
+            fwrite(&chromaFalsa, sizeof(uint8_t), 1, arquivo);
+        }
+    }
+
+
+    return;
 }
