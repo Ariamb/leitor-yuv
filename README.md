@@ -2,9 +2,9 @@
 
 ## Compilando:
 
-gcc -fopenmp leitor.c -lpthread -o leitor
+Para compilar e executar rodar:
 
-./ leitor
+<code>sh run.sh</code>
 
 (Paralelismo adicionado na leitura. Deixo para vocês escolherem qual das formas é pra usar)
 
@@ -14,12 +14,12 @@ gcc -fopenmp leitor.c -lpthread -o leitor
 
 Trabalhos em grupos de até 4 indivíduos
 Implementação em OpenMP
-Data de entrega:  14/outubro
+Data de entrega: 14/outubro
 Tema: Algoritmo Full Search para estimação de movimento em vídeos
 
-Considere  um vídeo e a necessidade de armazená-lo ou enviá-lo via streaming. É interessante que a representação deste vídeo seja compactada, visando economia de recursos. O algoritmo Full Search aplica uma heurística de compactação que compara dois frames de um vídeo, de forma a enviar o primeiro e, do segundo, apenas as informações "inéditas" e de deslocamento das informações já contidas no frame anterior.  O algoritmo básico é:
+Considere um vídeo e a necessidade de armazená-lo ou enviá-lo via streaming. É interessante que a representação deste vídeo seja compactada, visando economia de recursos. O algoritmo Full Search aplica uma heurística de compactação que compara dois frames de um vídeo, de forma a enviar o primeiro e, do segundo, apenas as informações "inéditas" e de deslocamento das informações já contidas no frame anterior. O algoritmo básico é:
 
-Tenha como entrada dois frames, o frame R (referência)  e o frame A (o frame atual, o qual irá ser comparado)
+Tenha como entrada dois frames, o frame R (referência) e o frame A (o frame atual, o qual irá ser comparado)
 Considere a comparação de blocos de tamanho 8x8
 A saída é são dois vetores Rv e Ra de pares x,y, indicando qual bloco 8x8 em R contém as informações do bloco 8x8 em A
 Percorra toda o frame A pixel à pixel, (escolha se vai na horizontal ou na vertical primeiro) a partir do pixel selecionado, monte um bloco 8x8 e procure onde este bloco se encontra no frame R
