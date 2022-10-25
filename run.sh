@@ -5,7 +5,7 @@ then
     # If first parameter is not empty, use clang to compile the file
     if [ $# -eq 0 ]; 
     then
-        gcc -fopenmp leitor.c -lpthread -o leitor
+        gcc -fopenmp -Wall leitor.c -lpthread -o leitor
     else
         /usr/local/opt/llvm/bin/clang -fopenmp -L/usr/local/opt/llvm/lib leitor.c -o leitor
     fi

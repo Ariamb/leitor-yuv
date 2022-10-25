@@ -24,13 +24,7 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame);
 
 int main()
 {
-    int i = 0, j = 0, k = 0;
-    uint8_t byte; //representa perfeitamente os dados do video: 8 bits sem sinal
-    //se usasse char, teria problemas de conversão e sinal
-
     //tamanho do arquivo em bytes: 41472000
-
-
     //int array[120][640][360]; esse tamanho de array causa segmentation fault. É necessário dinamicamente construir o array
     //resolução de 640x360 com 120 frames, de acordo com o programa que abre arquivos yuv
     //a ALTURA é 360, e LARGURA é 640. 
@@ -52,13 +46,11 @@ int main()
 
 
 
-    start = omp_get_wtime();
     #pragma omp parallel for 
         for (int i = 0; i < readingThreads; i++)
         {
             leFrames(pixel, i * framesChunk, i * framesChunk + framesChunk);
         }
-    end = omp_get_wtime();
 
 
     //printf("tempo resultante do parallel for: %f \n", end-start);
