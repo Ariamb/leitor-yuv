@@ -1,151 +1,131 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <omp.h>
 
-struct resultadoBloco {   
-  int diferenca;
-  int posx;
-  int posy;
+#define num_threads 8
+#define frames_total 120
+#define width 640
+#define height 360
+#define video_name "video_converted_640x360.yuv"
+
+struct node {
+  int diff;
+  int x;
+  int y;
 };
 
-const int readingThreads = 8; // a quantia de tasks/threads usadas
+int frames_chunk = frames_total/num_threads;
 
-const int fileLength = 120;
-const int framesChunk = fileLength/readingThreads;
- 
+int compare_block(
+    uint8_t frames[frames_total][height][width], 
+    int frame,
+    int x, 
+    int y, 
+    int p, 
+    int q
+);
 
-int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q);
-void leFrames(uint8_t pixel[120][360][640], int i, int max);
-void escreveArquivo(uint8_t pixel[120][360][640]);
-struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame);
+void read_file(
+    uint8_t raw_video[frames_total][height][width], 
+    int i, 
+    int max
+);
 
+void write_file(uint8_t raw_video[frames_total][height][width]);
 
-int main()
-{
-    //tamanho do arquivo em bytes: 41472000
-    //int array[120][640][360]; esse tamanho de array causa segmentation fault. É necessário dinamicamente construir o array
-    //resolução de 640x360 com 120 frames, de acordo com o programa que abre arquivos yuv
-    //a ALTURA é 360, e LARGURA é 640. 
-    //Portando, considerando ordenação esquerda-pra-direita e cima-pra-baixo, o array fica [360][640]
-    //Tamanho 120*360*640
-    //além disso, temos os blocos cb e cr: duas matrizes 320x180 cada. Tamanho 120*180*320
-    //no total, essas posições ocupam 115200 bytes: 180*320*2, que devem ser compensados na leitura
+struct node * full_search(
+    uint8_t frames[frames_total][height][width], 
+    int frame
+);
 
-    int resolucao[] = {fileLength,360,640}; //frames x altura x largura
-    
-    //gambiarras pra uso de um espaço de memória contigua (precisa ser contiguo pra funcionar em mpi dps):
+int main() {
 
-    uint8_t (*pixel)[resolucao[1]][resolucao[2]] = calloc(resolucao[0], sizeof(*pixel));
-
-    
-    omp_set_num_threads(readingThreads);
-
-
-
-    #pragma omp parallel for 
-        for (int i = 0; i < readingThreads; i++)
-        {
-            leFrames(pixel, i * framesChunk, i * framesChunk + framesChunk);
-        }
-
-
-    //printf("tempo resultante do parallel for: %f \n", end-start);
-
-    //----------------full search alchemist---------------------
-   
-    //struct resultadoBloco (*framesVideo) = calloc(resolucao, sizeof(struct resultadoBloco));
-
-    //struct resultadoBloco (framesVideo) = calloc(119, sizeof(struct resultadoBloco *) * 3600);
-    struct resultadoBloco (*framesVideo);
-    struct resultadoBloco *matrizFrames[119];
-    #pragma omp parallel for 
-    for(int i = 1; i < 120; i++){
-        matrizFrames[i-1] = buscaCompleta(pixel, i);
-    }
-
-
-
-    // printf("tem isso no array: %d", framesVideo[0].posx);
     /*
-    for(int i = 0; i < 3; i++){
-        printf("esse é a MELHOR POSIÇÃO ENCONTRADA PRO BLOCO %d do FRAME 1 \n", i);
-        printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 1: \n", i);
-        printf("\n");
-
-        for(int j = 0; j < 8; j++){//x
-            for(int k = 0; k < 8; k++){//y
-                printf("%d ", pixel[1][j][k + i * 8]);
-            }
-            printf("\n");
-        }        
-        printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 0: \n", i);
-        for(int j = 0; j < 8; j++){
-            for(int k = 0; k < 8; k++){
-                printf("%d ", pixel[0][j][k + i * 8]);
-            }
-            printf("\n");
-        }
-        printf("ESSE É O BLOCO QUE MELHOR REPRESENTA O BLOCO %d DO FRAME 1 \n", i);
-        printf("O MELHOR BLOCO FICA AQUI Ó: X: %d, Y: %d, differenca: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
-        for(int j = 0; j < 8; j++){
-            for(int k = 0; k < 8; k++){
-                printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
-            }
-            printf("\n");
-        }        
-    }
-    //escreveArquivo(pixel);
+        Tamanho do arquivo em bytes: 41472000
+        blocos cb e cr: duas matrizes 320x180 cada. Tamanho frames_total*180*320
+        no total, essas posições ocupam 115200 bytes: 180*320*2, que devem ser compensados na leitura 
     */
-    free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
+
+    uint8_t (*raw_video)[height][width] = calloc(frames_total, sizeof(*raw_video));
+    
+    omp_set_num_threads(num_threads);
+
+    /* Reads file */
+    #pragma omp parallel for 
+        for (int i = 0; i < num_threads; i++) {
+            read_file(
+                raw_video, 
+                i * frames_chunk,
+                i * frames_chunk + frames_chunk
+            );
+        }
+
+
+    /* printf("tempo resultante do parallel for: %f \n", end-start); */
+   
+    struct node *best_frames[119];
+    
+    #pragma omp parallel for 
+    for(int i = 1; i < frames_total; i++) {
+        best_frames[i-1] = full_search(raw_video, i);
+    }
+
+    free(raw_video);
  
     return 0;
 }
 
 
-void leFrames(uint8_t pixel[120][360][640], int i, int max){
-    FILE* arquivo = fopen("video_converted_640x360.yuv", "r");
+void read_file(uint8_t raw_video[frames_total][height][width], int i, int max){
+    FILE* file = fopen(video_name, "r");
 
-    fseek(arquivo, i*(640*360 + 320*180*2), SEEK_SET);
+    fseek(
+        file, 
+        i * (width * height + 320 * 180 * 2), 
+        SEEK_SET
+    );
 
     int j = 0, k = 0;
+
     for(; i < max; i++){
-        for(j = 0; j < 360; j++)
-            for(k = 0; k < 640; k++)
-                pixel[i][j][k] = fgetc(arquivo);
+        for(j = 0; j < height; j++)
+            for(k = 0; k < width; k++)
+                raw_video[i][j][k] = fgetc(file);
         
-        fseek(arquivo, 180*320*2, SEEK_CUR); // compensa crominância
+        /* Crominância */
+        fseek(
+            file, 
+            180 * 320 * 2, 
+            SEEK_CUR
+        ); 
     }
 
-    fclose(arquivo);
+    fclose(file);
 
 }
 
-// heurística de comparação de sem usar novas variaveis
-int compara(uint8_t frames[120][360][640], int frame, int x, int y, int p, int q){ 
+int compare_block(uint8_t frames[frames_total][height][width], int frame, int x, int y, int p, int q) { 
     //frames, frame a comparar, pixel vertical, pixel horizontal, deslocamento de bloco vertical. deslocamento de bloco horizontal
 
     int diff = 0;
-    for(int i = 0; i < 8; i++){
-        for(int j = 0; j < 8; j++){
-            diff += abs(frames[0][x+i][y+j] - frames[frame][p+i][q+j]);
-            //desloca pixel no frame de referencia e bloco no frame a comparar
-            //escolher um cálculo melhor em vez de só acumular a diferença?
+
+    for(int row = 0; row < 8; row++) {
+        for(int col = 0; col < 8; col++) {
+            diff += abs(frames[0][x + row][y + col] - frames[frame][p + row][q + col]);
         }   
     }
+
     return diff;
 }
 
-
-//119
-struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
+struct node * full_search(uint8_t frames[frames_total][height][width], int frame){
 
     int resolucao = 3600;
 
-    struct resultadoBloco melhorBloco;
-    //aqui cabem os dados de um unico frame ((360/8)*(630/8))
-    struct resultadoBloco (*framesVideo) = calloc(resolucao, sizeof(struct resultadoBloco));
+    struct node melhorBloco;
+    //aqui cabem os dados de um unico frame ((height/8)*(630/8))
+    struct node (*framesVideo) = calloc(resolucao, sizeof(struct node));
 
     //cada frame tem 45*80 blocos compactáveis
     //num frame, cada bloco vai fazer uma busca em até 352*632 blocos
@@ -157,22 +137,22 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     printf("comecei a executar o frame %d \n", frame);
     for(int p = 0; p < 45; p++){//vertical
         for(int q = 0; q < 80; q++){//horizontal
-            melhorBloco.diferenca = 99999;
-            for(int i = 0; i <= 360-8; i++){ //<=360-8 //i<= 632 vertical
-                for(int j = 0; j <= 640-8; j++){ //<=640-8 horizontal
+            melhorBloco.diff = 99999;
+            for(int i = 0; i <= height-8; i++){ //<=height-8 //i<= 632 vertical
+                for(int j = 0; j <= width-8; j++){ //<=width-8 horizontal
 
-                    aux = compara(frames, frame, i, j, p * 8, q * 8); //canto superior esquerdo
+                    aux = compare_block(frames, frame, i, j, p * 8, q * 8); //canto superior esquerdo
                     //frames gerais, frame a comparar, pixel vertical, pixel horizontal, deslocamento de bloco vertical, deslocamento de bloco horizontal
-                    if(aux < melhorBloco.diferenca){
-                        melhorBloco.diferenca = aux;
-                        melhorBloco.posx = i;
-                        melhorBloco.posy = j;
+                    if(aux < melhorBloco.diff){
+                        melhorBloco.diff = aux;
+                        melhorBloco.x = i;
+                        melhorBloco.y = j;
                     }
-                    if(melhorBloco.diferenca == 0){
+                    if(melhorBloco.diff == 0){
                         break;
                     }
                 }
-                if(melhorBloco.diferenca == 0){
+                if(melhorBloco.diff == 0){
                     break;
                 }
             }
@@ -193,30 +173,30 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
 
 
 
-void escreveArquivo(uint8_t frames[120][360][640]){//, struct resultadoBloco blocos[119][3600]){
-    FILE* arquivo = fopen("video_comprimido.yuv", "w"); //n adianta ser .yuv
+void write_file(uint8_t frames[frames_total][height][width]){//, struct node blocos[119][3600]){
+    FILE* file = fopen("video_comprimido.yuv", "w"); //n adianta ser .yuv
 
-    if(arquivo == NULL){
+    if(file == NULL){
         printf("arquivo não pode ser criado\n");
         return;
     }
     uint8_t chromaFalsa = 0;
 
 
-    for(int i = 0; i < 360; i++){
-        for(int j = 0; j < 640; j++){
-            fwrite(&frames[0][i][j], sizeof(uint8_t), 1, arquivo);
+    for(int i = 0; i < height; i++){
+        for(int j = 0; j < width; j++){
+            fwrite(&frames[0][i][j], sizeof(uint8_t), 1, file);
         }
     }
     //precisa escrever crominancia pra funcionar!
     for(int i = 0; i < 180; i++){
         for(int j = 0; j < 320; j++){
-            fwrite(&chromaFalsa, sizeof(uint8_t), 1, arquivo);
+            fwrite(&chromaFalsa, sizeof(uint8_t), 1, file);
         }
     }
     for(int i = 0; i < 180; i++){
         for(int j = 0; j < 320; j++){
-            fwrite(&chromaFalsa, sizeof(uint8_t), 1, arquivo);
+            fwrite(&chromaFalsa, sizeof(uint8_t), 1, file);
         }
     }
 
