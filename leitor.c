@@ -61,39 +61,41 @@ int main()
     end = omp_get_wtime();
 
 
-
-    for(i = 0; i < 8; i++){
-        for(j = 0; j < 8; j++){
-            printf("%d ", pixel[0][i][j]);
-        }
-        printf("\n");
-    }
-
     //printf("tempo resultante do parallel for: %f \n", end-start);
 
     //----------------full search alchemist---------------------
-   /*
+   
     struct resultadoBloco (*framesVideo) = buscaCompleta(pixel, 1);
     //printf("tem isso no array: %d", framesVideo[0].posx);
-    for(int i = 0; i < 2; i++){
-        printf("bloco que eu quero: \n");
-        for(int j = 0; j < 8; j++){
-            for(int k = 0; k < 8; k++){
-                printf("%d ", pixel[0][j + i * 8][k]);
-            }
+        for(int i = 0; i < 3; i++){
+            printf("esse é a MELHOR POSIÇÃO ENCONTRADA PRO BLOCO %d do FRAME 1 \n", i);
+            printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 1: \n", i);
             printf("\n");
+
+            for(int j = 0; j < 8; j++){//x
+                for(int k = 0; k < 8; k++){//y
+                    printf("%d ", pixel[1][j][k + i * 8]);
+                }
+                printf("\n");
+            }        
+            printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 0: \n", i);
+            for(int j = 0; j < 8; j++){
+                for(int k = 0; k < 8; k++){
+                    printf("%d ", pixel[0][j][k + i * 8]);
+                }
+                printf("\n");
+            }
+            printf("ESSE É O BLOCO QUE MELHOR REPRESENTA O BLOCO %d DO FRAME 1 \n", i);
+            printf("O MELHOR BLOCO FICA AQUI Ó: X: %d, Y: %d, differenca: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
+            for(int j = 0; j < 8; j++){
+                for(int k = 0; k < 8; k++){
+                    printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
+                }
+                printf("\n");
+            }        
         }
-        printf("stats do bloco que achei: \n x: %d, y: %d, diff: %d \n", framesVideo[i].posx, framesVideo[i].posy, framesVideo[i].diferenca);
-        printf("bloco que achei: \n");
-        for(int j = 0; j < 8; j++){
-            for(int k = framesVideo[i].posy; k < 8; k++){
-                printf("%d ", pixel[0][j + framesVideo[i].posx][k + framesVideo[i].posy]);
-            }
-            printf("\n");
-        }        
-    }
-    */
-    escreveArquivo(pixel);
+    
+    //escreveArquivo(pixel);
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
  
     return 0;
@@ -151,8 +153,8 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     for(int p = 0; p < 45; p++){
         for(int q = 0; q < 80; q++){
             melhorBloco.diferenca = 99999;
-            for(int i = 0; i <= 640-8; i++){ //<=360-8
-                for(int j = 0; j <= 360-8; j++){ //<=640-8
+            for(int i = 0; i <= 360-8; i++){ //<=360-8 //i<= 632
+                for(int j = 0; j <= 640-8; j++){ //<=640-8
 
                     aux = compara(frames, frame, i, j, p * 8, q * 8); //canto superior esquerdo
                     if(aux < melhorBloco.diferenca){
@@ -175,8 +177,9 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     }
     printf("total de entradas no array: %d \n", posArray);
     printf("total de testes: %d \n", totalIteracoes);
-
     //framesVideo[0] primeiro bloco
+    //framesVideo[80] ultimo bloco da primeira linha
+    //framesVideo[80] primeiro bloco da primeira linha
     //framesVIdeo[3600] ultimo bloco
     return framesVideo;
 }
