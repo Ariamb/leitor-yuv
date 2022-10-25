@@ -38,9 +38,7 @@ int main()
     //gambiarras pra uso de um espaço de memória contigua (precisa ser contiguo pra funcionar em mpi dps):
 
     uint8_t (*pixel)[resolucao[1]][resolucao[2]] = calloc(resolucao[0], sizeof(*pixel));
-    double start;
 
-    double end;
     
     omp_set_num_threads(readingThreads);
 
@@ -57,8 +55,23 @@ int main()
 
     //----------------full search alchemist---------------------
    
-    struct resultadoBloco (*framesVideo) = buscaCompleta(pixel, 1);
+    //struct resultadoBloco (*framesVideo) = calloc(resolucao, sizeof(struct resultadoBloco));
+
+    //struct resultadoBloco (framesVideo) = calloc(119, sizeof(struct resultadoBloco *) * 3600);
+    struct resultadoBloco (*framesVideo);
+    struct resultadoBloco *matrizFrames[119];
+    for(int i = 1; i < 3; i++){
+        matrizFrames[i-1] = buscaCompleta(pixel, i);
+        printf("%d \n", matrizFrames[i-1][0].posx);
+        printf("%d \n", matrizFrames[i-1][0].posy);
+        printf("%d \n", matrizFrames[i-1][0].diferenca);
+        printf("\n");
+    }
+
+
+
     // printf("tem isso no array: %d", framesVideo[0].posx);
+    /*
     for(int i = 0; i < 3; i++){
         printf("esse é a MELHOR POSIÇÃO ENCONTRADA PRO BLOCO %d do FRAME 1 \n", i);
         printf("ISSO É O QUE TEM NO BLOCO %d DO FRAME 1: \n", i);
@@ -86,8 +99,8 @@ int main()
             printf("\n");
         }        
     }
-    
     //escreveArquivo(pixel);
+    */
     free(pixel); // tem que lembrar de limpar a memória pq essa variável é gigante
  
     return 0;
@@ -143,8 +156,8 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
     //800870400 iterações
     //800 MILHÕES de iterações
     //acho que tem alguma coisa errada aqui, na moral
-    int aux, posArray = 0, totalIteracoes = 0;
-    for(int p = 0; p < 45; p++){//vertical
+    int aux, posArray = 0;
+    for(int p = 0; p < 1; p++){//vertical
         for(int q = 0; q < 80; q++){//horizontal
             melhorBloco.diferenca = 99999;
             for(int i = 0; i <= 360-8; i++){ //<=360-8 //i<= 632 vertical
@@ -170,8 +183,6 @@ struct resultadoBloco * buscaCompleta(uint8_t frames[120][360][640], int frame){
         posArray++;
         }
     }
-    printf("total de entradas no array: %d \n", posArray);
-    printf("total de testes: %d \n", totalIteracoes);
     //framesVideo[0] primeiro bloco
     //framesVideo[80] ultimo bloco da primeira linha
     //framesVideo[80] primeiro bloco da primeira linha
