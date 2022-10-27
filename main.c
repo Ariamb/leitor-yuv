@@ -72,7 +72,7 @@ int main() {
                 );
             }
         #pragma omp for 
-            for(int l = 1; l <25; l++) 
+            for(int l = 1; l <9; l++) 
             {
                 best_frames[l-1] = full_search(raw_frames, l);
             }
@@ -80,7 +80,7 @@ int main() {
 
     end = omp_get_wtime();
     printf("execution time: %f \n", end-start);
-    write_uncompressed_file(raw_frames, best_frames);
+    // write_uncompressed_file(raw_frames, best_frames);
 
     free(raw_frames);
     
@@ -144,7 +144,7 @@ struct node * full_search(uint8_t frames[frames_total][height][width], int frame
     struct node (*frames_video) = calloc(resolution, sizeof(struct node));
     
     printf("comecei a executar o frame %d \n", frame);
-    #pragma omp for collapse(2)
+//  #pragma omp parallel for collapse(2)
     for (int vertical = 0; vertical < 45; vertical++) {
         for (int horizontal = 0; horizontal < 80; horizontal++) {
             int aux; 
@@ -166,10 +166,8 @@ struct node * full_search(uint8_t frames[frames_total][height][width], int frame
                 }
             }
         frames_video[80 * vertical + horizontal] = best_block;
-               
         }
     }
-
     printf("terminei de executar o frame %d \n", frame);
 
     return frames_video;
@@ -202,19 +200,20 @@ void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct
         }
     }
     //#pragma omp parallel for collapse(4) ordered
-    for(int f = 0; f < 25 - 1; f++){
-        for(int i = 0; i < 45; i++){
-            for(int row  = 0; row < 8; row++){
-                for(int j = 0; j < 80; j++){
+    for(int f = 0; f < 9 - 1; f++){
+        for(int i = 0; i < 45; i++){//vertical
+            for(int row  = 0; row < 8; row++){//linha
+                for(int j = 0; j < 80; j++){//horizontal
                     //#pragma omp ordered
                     struct node b = best_frames[f][80 * i + j];
-                    for(int col = 0; col < 8; col++){
+                    for(int col = 0; col < 8; col++){//coluna
                         fwrite(&frames[0][row + b.x][col + b.y], sizeof(uint8_t), 1, file);
                     }
                     
                 }
             }
         }
+
         for(int i = 0; i < 180; i++){
             for(int j = 0; j < 320; j++){
                 fwrite(&chromaFalsa, sizeof(uint8_t), 1, file);
