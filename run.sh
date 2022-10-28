@@ -6,7 +6,7 @@ then
     # If first parameter is not empty, use clang to compile the file
     if [ $# -eq 0 ]; 
     then
-        gcc -fopenmp -Wall main.c -lpthread -o main
+        gcc -fopenmp -Wall main.c -lpthread -O3 -o main
     else
         /usr/local/opt/llvm/bin/clang -fopenmp -L/usr/local/opt/llvm/lib main.c -o main
     fi

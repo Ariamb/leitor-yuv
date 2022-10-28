@@ -50,19 +50,19 @@ int main() {
 
     /* Reads file */
 
-    struct node *best_frames[frames_total - 1];
+    struct node *best_frames[frames_total];
 
     int count = 0;
 
     double start, end;
     start = omp_get_wtime();
-    #pragma omp parallel
-    {
+    // #pragma omp parallel
+    // {
         int num_threads = omp_get_max_threads();
 
         int frames_chunk = frames_total/num_threads;
 
-        #pragma omp for 
+        // #pragma omp for 
             for (int i = 0; i < num_threads; i++) 
             {
                 read_file(
@@ -71,16 +71,16 @@ int main() {
                     i * frames_chunk + frames_chunk
                 );
             }
-        #pragma omp for 
-            for(int l = 1; l <9; l++) 
+        // #pragma omp for 
+            for(int l = 0; l <120; l++) 
             {
-                best_frames[l-1] = full_search(raw_frames, l);
+                best_frames[l] = full_search(raw_frames, l);
             }
-    }
+    // }
 
     end = omp_get_wtime();
     printf("execution time: %f \n", end-start);
-    // write_uncompressed_file(raw_frames, best_frames);
+    write_uncompressed_file(raw_frames, best_frames);
 
     free(raw_frames);
     
@@ -126,7 +126,7 @@ int compare_block(
     ) { 
 
     int diff = 0;
-
+    // return 0;
     for(int row = 0; row < 8; row++) {
         for(int col = 0; col < 8; col++) {
             diff += abs(frames[0][pixel_x + row][pixel_y + col] - frames[frame][vertical + row][horizontal + col]);
@@ -144,13 +144,12 @@ struct node * full_search(uint8_t frames[frames_total][height][width], int frame
     struct node (*frames_video) = calloc(resolution, sizeof(struct node));
     
     printf("comecei a executar o frame %d \n", frame);
-//  #pragma omp parallel for collapse(2)
+     #pragma omp parallel for collapse(2)
     for (int vertical = 0; vertical < 45; vertical++) {
         for (int horizontal = 0; horizontal < 80; horizontal++) {
             int aux; 
             struct node best_block;
             best_block.diff = 99999;
-
             for (int x = 0; x <= height-8; x++) { 
 
                 for (int y = 0; y <= width-8; y++){ 
@@ -165,7 +164,7 @@ struct node * full_search(uint8_t frames[frames_total][height][width], int frame
 
                 }
             }
-        frames_video[80 * vertical + horizontal] = best_block;
+            frames_video[80 * vertical + horizontal] = best_block;
         }
     }
     printf("terminei de executar o frame %d \n", frame);
@@ -200,7 +199,7 @@ void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct
         }
     }
     //#pragma omp parallel for collapse(4) ordered
-    for(int f = 0; f < 9 - 1; f++){
+    for(int f = 1; f < 120; f++){
         for(int i = 0; i < 45; i++){//vertical
             for(int row  = 0; row < 8; row++){//linha
                 for(int j = 0; j < 80; j++){//horizontal
