@@ -1,3 +1,4 @@
+clear
 if [ -f "video_converted_640x360.yuv" ]; 
 then
     echo "Compiling"
@@ -5,16 +6,16 @@ then
     # If first parameter is not empty, use clang to compile the file
     if [ $# -eq 0 ]; 
     then
-        gcc -fopenmp leitor.c -lpthread -o leitor
+        gcc -fopenmp -Wall main.c -lpthread -O3 -o main
     else
-        /usr/local/opt/llvm/bin/clang -fopenmp -L/usr/local/opt/llvm/lib leitor.c -o leitor
+        /usr/local/opt/llvm/bin/clang -fopenmp -L/usr/local/opt/llvm/lib main.c -o main
     fi
 
     echo "Executing"
-    ./leitor
+    ./main
 
     echo "Removing executable"
-    rm leitor
+    rm main
 else
     echo "video_converted_640x360.yuv has not been found"
 fi
