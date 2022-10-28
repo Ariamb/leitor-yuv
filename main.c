@@ -32,10 +32,13 @@ void read_file(
 
 void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct node *best_frames[frames_total - 1]);
 
+void write_frame_zero(uint8_t frames[frames_total][height][width]);
 struct node * full_search(
     uint8_t frames[frames_total][height][width], 
     int frame
 );
+
+void write_frame(uint8_t frames[frames_total][height][width], struct node *best_frames);
 
 int main() {
 
@@ -52,7 +55,6 @@ int main() {
 
     struct node *best_frames[frames_total];
 
-    int count = 0;
 
     double start, end;
     start = omp_get_wtime();
@@ -62,7 +64,7 @@ int main() {
 
         int frames_chunk = frames_total/num_threads;
 
-        // #pragma omp for 
+        #pragma omp parallel for 
             for (int i = 0; i < num_threads; i++) 
             {
                 read_file(
@@ -71,15 +73,24 @@ int main() {
                     i * frames_chunk + frames_chunk
                 );
             }
+
+
+
+
+        #pragma omp task
+            write_frame_zero(raw_frames);
         // #pragma omp for 
             for(int l = 0; l <120; l++) 
             {
                 best_frames[l] = full_search(raw_frames, l);
+                #pragma omp task
+                    write_frame(raw_frames, best_frames[l]);
             }
     // }
 
     end = omp_get_wtime();
     printf("execution time: %f \n", end-start);
+    #pragma omp taskwait
     write_uncompressed_file(raw_frames, best_frames);
 
     free(raw_frames);
@@ -172,7 +183,8 @@ struct node * full_search(uint8_t frames[frames_total][height][width], int frame
     return frames_video;
 }
 
-void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct node *best_frames[frames_total - 1]) { //uncompressed
+
+void write_frame_zero(uint8_t frames[frames_total][height][width]) { //uncompressed
     FILE* file = fopen("video_uncompressed.yuv", "w"); 
 
     if(file == NULL){
@@ -183,21 +195,60 @@ void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct
 
 
     for(int i = 0; i < height; i++){
-        for(int j = 0; j < width; j++){
-            fwrite(&frames[0][i][j], sizeof(uint8_t), 1, file);
-        }
+            fwrite(&frames[0][i][0], sizeof(uint8_t), width, file);
     }
     //precisa escrever crominancia pra funcionar!
-    for(int i = 0; i < 180; i++){
+    for(int i = 0; i < 180 * 2; i++){
         for(int j = 0; j < 320; j++){
             fwrite(&chromaFalsa, sizeof(uint8_t), 1, file);
         }
     }
-    for(int i = 0; i < 180; i++){
+}
+
+void write_frame(uint8_t frames[frames_total][height][width], struct node *best_frames){
+    
+    FILE* file = fopen("video_uncompressed.yuv", "w"); 
+
+    if(file == NULL){
+        printf("arquivo não pode ser criado\n");
+        return;
+    }
+    uint8_t chromaFalsa = 0;
+    #pragma omp taskwait
+    //#pragma omp parallel for collapse(4) ordered
+    for(int i = 0; i < 45; i++){//vertical
+        for(int row  = 0; row < 8; row++){//linha
+            for(int j = 0; j < 80; j++){//horizontal
+                //#pragma omp ordered
+                struct node b = best_frames[80 * i + j];
+                //for(int col = 0; col < 8; col++){//coluna
+                    fwrite(&frames[0][row + b.x][b.y], sizeof(uint8_t), 8, file);
+                //}
+                
+            }
+        }
+    }
+
+    for(int i = 0; i < 180 * 2; i++){
         for(int j = 0; j < 320; j++){
             fwrite(&chromaFalsa, sizeof(uint8_t), 1, file);
         }
     }
+
+
+    return;
+
+}
+
+void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct node *best_frames[frames_total - 1]) { //uncompressed
+    FILE* file = fopen("video_uncompressed.yuv", "w"); 
+
+    if(file == NULL){
+        printf("arquivo não pode ser criado\n");
+        return;
+    }
+    uint8_t chromaFalsa = 0;
+
     //#pragma omp parallel for collapse(4) ordered
     for(int f = 1; f < 120; f++){
         for(int i = 0; i < 45; i++){//vertical
@@ -213,17 +264,11 @@ void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct
             }
         }
 
-        for(int i = 0; i < 180; i++){
+        for(int i = 0; i < 180 * 2; i++){
             for(int j = 0; j < 320; j++){
                 fwrite(&chromaFalsa, sizeof(uint8_t), 1, file);
             }
         }
-        for(int i = 0; i < 180; i++){
-            for(int j = 0; j < 320; j++){
-                fwrite(&chromaFalsa, sizeof(uint8_t), 1, file);
-            }
-        }
-
     }
 
     return;
