@@ -1,4 +1,3 @@
-video_converted_640x360.yuv
-video_comprimido.yuv
-video_uncompressed.yuv
+*.yuv
+*.bin
 main

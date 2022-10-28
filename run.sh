@@ -2,6 +2,9 @@ clear
 if [ -f "video_converted_640x360.yuv" ]; 
 then
     echo "Compiling"
+    rm racompressed.bin
+    rm rvcompressed.bin
+    rm video_uncompressed.yuv
     
     # If first parameter is not empty, use clang to compile the file
     if [ $# -eq 0 ]; 
