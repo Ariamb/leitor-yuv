@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <omp.h>
+#include <mpi.h>
 
 #define frames_total 120
 #define width 640
@@ -58,6 +59,12 @@ int main() {
 
     int frames_chunk = frames_total/num_threads;
 
+    int world_size, my_rank;
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
     #pragma omp parallel for 
         for (int i = 0; i < num_threads; i++) 
         {
@@ -67,7 +74,40 @@ int main() {
                 i * frames_chunk + frames_chunk
             );
         }
+/* 
+    You can't send memory addresses/references through MPI. 
+    Since each "process" has it's own memory, all that is passed is unlinked gibberish
 
+    in order to send a frame, we will probably need to put it inside a MPI packet or MPI buffer
+    
+    for (int i = 0; i < 640; i++){
+        for (int j = 0; j < 360; j++){
+            //put each pixel of a frame inside the buffer;
+        }
+    }
+
+    if(my_rank == 0){
+        //master rank delegates frames/jobs to processes, by sending the frames
+        MPI_Send(&buffer/pa, size, type, 1, 0, MPI_COMM_WORLD);
+    }
+
+    if(my_rank == 1){
+        MPI_Status status;
+        //non-master receives the buffer/packet and puts it into our data structures
+        int ierr = MPI_Recv(&buffer, size, type, 0, 0, MPI_COMM_WORLD, &status);
+        
+        if(ierr == MPI_SUCCESS)
+            //all good
+        else //error
+        
+    }
+ */
+
+    //execution proceeds a bit different:
+    //instead of executing 0-120, executes whatever frame was received
+    //and then sends back to master
+
+    //i think this will happen inside of the scope of the "my_rank == something" test?
     for(int l = 0; l <120; l++) 
     {
         best_frames[l] = full_search(raw_frames, l);
@@ -85,7 +125,7 @@ int main() {
 
     free(raw_frames);
     
-    
+    MPI_Finalize();
     return 0;
 }
 
