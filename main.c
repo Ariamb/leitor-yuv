@@ -45,11 +45,9 @@ void write_frame(uint8_t frames[frames_total][height][width], struct node *best_
 int main() {
 
 
-    uint8_t (*raw_frames)[height][width] = calloc(frames_total, sizeof(*raw_frames));
     
 
 
-    struct node *best_frames[frames_total];
 
 
     double start, end;
@@ -65,65 +63,70 @@ int main() {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    #pragma omp parallel for 
-        for (int i = 0; i < num_threads; i++) 
-        {
-            read_file(
-                raw_frames, 
-                i * frames_chunk,
-                i * frames_chunk + frames_chunk
-            );
-        }
-/* 
-    You can't send memory addresses/references through MPI. 
-    Since each "process" has it's own memory, all that is passed is unlinked gibberish
 
-    in order to send a frame, we will probably need to put it inside a MPI packet or MPI buffer
-    
-    for (int i = 0; i < 640; i++){
-        for (int j = 0; j < 360; j++){
-            //put each pixel of a frame inside the buffer;
-        }
-    }
+/*
+    já que reclamaram do commit em inglês:
+
+    o ranque zero é o mestre. Nesse caso, ele faz aquela parte inicial de leitura do arquivo,
+    e manda tudo pro ranque 1. O ranque 1 executa tudo como se fosse um único processador.
+    Esse código só funfa se rodar com 2 processos no mpirun
+
+    Tem que arrumar pra delegar entre mais processos
+    e de forma que o ranque 0 não fique a toa o tempo todo
+
+*/
 
     if(my_rank == 0){
-        //master rank delegates frames/jobs to processes, by sending the frames
-        MPI_Send(&buffer/pa, size, type, 1, 0, MPI_COMM_WORLD);
+    uint8_t (*raw_frames)[height][width] = calloc(frames_total, sizeof(*raw_frames));
+
+        #pragma omp parallel for 
+            for (int i = 0; i < num_threads; i++) 
+            {
+                read_file(
+                    raw_frames, 
+                    i * frames_chunk,
+                    i * frames_chunk + frames_chunk
+                );
+            }
+
+        for (int f = 0; f < frames_total; f++){
+            int target = 1; //temos que fazer funcionar pra vários processos
+            MPI_Send(raw_frames[f], width * height, MPI_UINT8_T, target, 0, MPI_COMM_WORLD);
+            printf("sent frame %d to target %d \n", f, target);
+        }
+        free(raw_frames);
     }
 
     if(my_rank == 1){
-        MPI_Status status;
-        //non-master receives the buffer/packet and puts it into our data structures
-        int ierr = MPI_Recv(&buffer, size, type, 0, 0, MPI_COMM_WORLD, &status);
-        
-        if(ierr == MPI_SUCCESS)
-            //all good
-        else //error
-        
-    }
- */
+        uint8_t (*raw_frames)[height][width] = calloc(frames_total, sizeof(*raw_frames));
 
-    //execution proceeds a bit different:
-    //instead of executing 0-120, executes whatever frame was received
-    //and then sends back to master
+        struct node *best_frames[frames_total];
 
-    //i think this will happen inside of the scope of the "my_rank == something" test?
-    for(int l = 0; l <120; l++) 
-    {
-        best_frames[l] = full_search(raw_frames, l);
+        for (int f = 0; f < frames_total; f++){
+            MPI_Status status; 
+            int ierr = MPI_Recv(raw_frames[f], width * height, MPI_UINT8_T, 0, 0, MPI_COMM_WORLD, &status);
+            if(ierr != MPI_SUCCESS)
+                printf("Error found during frame %d\n", f);
+            else printf("received %d frame\n", f);
+            
+        }
+        
+        for(int l = 0; l < frames_total; l++) {   
+            best_frames[l] = full_search(raw_frames, l);
+        }
+        write_uncompressed_file(raw_frames, best_frames);
+
+        write_crompressed_vectors(best_frames);
+        
+        free(raw_frames);
+        for(int i = 0; i < frames_total; i++){
+            free(best_frames[i]);
+        }
+        
     }
 
     end = omp_get_wtime();
     printf("execution time: %f \n", end-start);
-    write_uncompressed_file(raw_frames, best_frames);
-
-    write_crompressed_vectors(best_frames);
-
-    for(int i = 0; i < frames_total; i++){
-        free(best_frames[i]);
-    }
-
-    free(raw_frames);
     
     MPI_Finalize();
     return 0;

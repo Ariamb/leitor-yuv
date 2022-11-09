@@ -15,7 +15,7 @@ then
     fi
 
     echo "Executing"
-    ./main
+    mpirun -n 2 --bind-to none ./main
 
     echo "Removing executable"
     rm main
