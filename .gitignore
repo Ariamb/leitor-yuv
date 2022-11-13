@@ -1,3 +1,5 @@
 *.yuv
 *.bin
 main
+teste.c
+teste

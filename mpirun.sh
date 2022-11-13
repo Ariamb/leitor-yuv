@@ -9,13 +9,13 @@ then
     # If first parameter is not empty, use clang to compile the file
     if [ $# -eq 0 ]; 
     then
-        mpicc --host localhost:4 -fopenmp -Wall  main.c -pthread -O3 -o main
+        mpicc -fopenmp -Wall  main.c -pthread -O3 -o main
     else
         /usr/local/opt/llvm/bin/clang -fopenmp -L/usr/local/opt/llvm/lib main.c -o main
     fi
 
     echo "Executing"
-    mpirun -n 2 --bind-to none ./main
+    mpirun --host localhost:2 --bind-to none ./main
 
     echo "Removing executable"
     rm main

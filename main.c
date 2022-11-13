@@ -8,6 +8,7 @@
 #define width 640
 #define height 360
 #define video_name "video_converted_640x360.yuv"
+#define process_amount 2 //descobrir como pegar isso automaticamente
 
 struct node {
   int diff;
@@ -20,9 +21,10 @@ int compare_block(
     uint8_t frames[frames_total][height][width], 
     int frame,
     int x, 
-    int y, 
-    int p, 
-    int q
+    int y,
+    int p,
+    int q,
+    uint8_t reference_frame[height][width]
 );
 
 void read_file(
@@ -30,25 +32,22 @@ void read_file(
     int i, 
     int max
 );
-void write_crompressed_vectors(struct node *best_frames[frames_total]);
+void write_crompressed_vectors(struct node best_frames[frames_total][3600]);
 
-void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct node *best_frames[frames_total]);
+void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct node best_frames[frames_total][3600]);
 
 void write_frame_zero(uint8_t frames[frames_total][height][width]);
+
 struct node * full_search(
     uint8_t frames[frames_total][height][width], 
-    int frame
+    int frame,
+    uint8_t reference_frame[height][width],
+    struct node best_block[frames_total / process_amount][3600]
 );
 
 void write_frame(uint8_t frames[frames_total][height][width], struct node *best_frames);
 
 int main() {
-
-
-    
-
-
-
 
     double start, end;
     start = omp_get_wtime();
@@ -75,10 +74,9 @@ int main() {
     e de forma que o ranque 0 não fique a toa o tempo todo
 
 */
-
+    uint8_t (*raw_frames)[height][width];
     if(my_rank == 0){
-    uint8_t (*raw_frames)[height][width] = calloc(frames_total, sizeof(*raw_frames));
-
+        raw_frames = calloc(frames_total, sizeof(*raw_frames));
         #pragma omp parallel for 
             for (int i = 0; i < num_threads; i++) 
             {
@@ -89,41 +87,77 @@ int main() {
                 );
             }
 
-        for (int f = 0; f < frames_total; f++){
-            int target = 1; //temos que fazer funcionar pra vários processos
-            MPI_Send(raw_frames[f], width * height, MPI_UINT8_T, target, 0, MPI_COMM_WORLD);
-            printf("sent frame %d to target %d \n", f, target);
+        for (int f = 0; f < process_amount; f++){
+            int target = f;
+            MPI_Send(raw_frames[0], width * height, MPI_UINT8_T, target, 0, MPI_COMM_WORLD);
+            printf("sent frame 0 to target %d \n", target);
         }
-        free(raw_frames);
     }
 
-    if(my_rank == 1){
-        uint8_t (*raw_frames)[height][width] = calloc(frames_total, sizeof(*raw_frames));
+    uint8_t (*reference_frame)[height][width] = calloc(1, sizeof(reference_frame));
+    MPI_Status status;
+    MPI_Recv(reference_frame[0], width * height, MPI_UINT8_T, 0, 0, MPI_COMM_WORLD, &status);
 
-        struct node *best_frames[frames_total];
+    uint8_t (*scattered_frames)[height][width] = calloc(frames_total / process_amount, sizeof(*scattered_frames));
+    MPI_Scatter(raw_frames, width * height * frames_total  / process_amount, MPI_UINT8_T, 
+                scattered_frames, width * height * frames_total  / process_amount, MPI_UINT8_T, 
+                0, MPI_COMM_WORLD);
 
-        for (int f = 0; f < frames_total; f++){
-            MPI_Status status; 
-            int ierr = MPI_Recv(raw_frames[f], width * height, MPI_UINT8_T, 0, 0, MPI_COMM_WORLD, &status);
-            if(ierr != MPI_SUCCESS)
-                printf("Error found during frame %d\n", f);
-            else printf("received %d frame\n", f);
-            
-        }
-        
-        for(int l = 0; l < frames_total; l++) {   
-            best_frames[l] = full_search(raw_frames, l);
-        }
-        write_uncompressed_file(raw_frames, best_frames);
+    //TODO: colocar essa aberração numa função
+    //o objetivo desse código é permitir que a gente envie a nossa struct pelo scather/gatter sem usar packs
+    //ta uma desgraça, alguem esconde isso daqui por favor
+    MPI_Datatype node_type;
+    int lengths[3] = { 1, 1, 1 };
 
-        write_crompressed_vectors(best_frames);
-        
-        free(raw_frames);
-        for(int i = 0; i < frames_total; i++){
-            free(best_frames[i]);
-        }
-        
+    MPI_Aint displacements[3];
+    struct node dummy_node;
+    MPI_Aint base_address;
+    MPI_Get_address(&dummy_node, &base_address);
+    MPI_Get_address(&dummy_node.diff, &displacements[0]);
+    MPI_Get_address(&dummy_node.x, &displacements[1]);
+    MPI_Get_address(&dummy_node.y, &displacements[2]);
+    displacements[0] = MPI_Aint_diff(displacements[0], base_address);
+    displacements[1] = MPI_Aint_diff(displacements[1], base_address);
+    displacements[2] = MPI_Aint_diff(displacements[2], base_address);
+ 
+    MPI_Datatype types[3] = { MPI_INT, MPI_INT, MPI_INT };
+    MPI_Type_create_struct(3, lengths, displacements, types, &node_type);
+    MPI_Type_commit(&node_type);
+
+
+    //gatter
+
+    struct node (*best_frames)[3600] = calloc(frames_total / process_amount, sizeof(best_frames));
+
+    for (int f = 0; f < frames_total / process_amount; f++){
+        full_search(scattered_frames, f, reference_frame, best_frames);
     }
+
+    //best_frames[frames_total / process_amount][3600];
+    //MPI_Gather(&aux, 1, person_type, recebidos, 1, person_type, 0, MPI_COMM_WORLD);
+    
+    struct node (*all_best_frames)[3600];
+    
+    if(my_rank == 0){
+        all_best_frames = calloc(frames_total, sizeof(all_best_frames));
+    }    
+
+
+    MPI_Gather(best_frames, 3600 * (frames_total / process_amount), node_type, 
+                all_best_frames, 3600 * (frames_total / process_amount), node_type, 0, MPI_COMM_WORLD);
+    
+
+    if(my_rank == 0){
+        write_uncompressed_file(raw_frames, all_best_frames);
+
+        write_crompressed_vectors(all_best_frames);
+    }
+
+    
+        
+
+    
+    free(raw_frames);
 
     end = omp_get_wtime();
     printf("execution time: %f \n", end-start);
@@ -164,56 +198,51 @@ int compare_block(
     int pixel_x, 
     int pixel_y, 
     int vertical, 
-    int horizontal
+    int horizontal,
+    uint8_t reference_frame[height][width]
     ) { 
 
     int diff = 0;
     for(int row = 0; row < 8; row++) {
         for(int col = 0; col < 8; col++) {
-            diff += abs(frames[0][pixel_x + row][pixel_y + col] - frames[frame][vertical + row][horizontal + col]);
+            diff += abs(reference_frame[pixel_x + row][pixel_y + col] - frames[frame][vertical + row][horizontal + col]);
         }   
     }
 
     return diff;
 }
 
-struct node * full_search(uint8_t frames[frames_total][height][width], int frame) {
+struct node * full_search(uint8_t frames[frames_total][height][width], int frame, uint8_t reference_frame[height][width], struct node best_block[frames_total / process_amount][3600]) {
 
-    int resolution = 3600;
-
-    struct node (*frames_video) = calloc(resolution, sizeof(struct node));
-    
     printf("comecei a executar o frame %d \n", frame);
      #pragma omp parallel for collapse(2)
     for (int vertical = 0; vertical < 45; vertical++) {
         for (int horizontal = 0; horizontal < 80; horizontal++) {
             int aux; 
-            struct node best_block;
-            best_block.diff = 99999;
+            struct node local_block;
+            local_block.diff = 99999;
             for (int x = 0; x <= height-8; x++) { 
 
                 for (int y = 0; y <= width-8; y++){ 
 
-                    aux = compare_block(frames, frame, x, y, vertical * 8, horizontal * 8); 
+                    aux = compare_block(frames, frame, x, y, vertical * 8, horizontal * 8, reference_frame); 
 
-                    if (aux < best_block.diff) {
-                        best_block.diff = aux;
-                        best_block.x = x;
-                        best_block.y = y;
+                    if (aux < local_block.diff) {
+                        local_block.diff = aux;
+                        local_block.x = x;
+                        local_block.y = y;
                     }
 
                 }
             }
-            frames_video[80 * vertical + horizontal] = best_block;
+            best_block[frame][80 * vertical + horizontal] = local_block;
         }
     }
     printf("terminei de executar o frame %d \n", frame);
-
-    return frames_video;
 }
 
 
-void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct node *best_frames[frames_total]) { //uncompressed
+void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct node best_frames[frames_total][3600]) { //uncompressed
     FILE* file = fopen("video_uncompressed.yuv", "w"); 
 
     if(file == NULL){
@@ -248,7 +277,7 @@ void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct
 
 
 
-void write_crompressed_vectors(struct node *best_frames[frames_total]){
+void write_crompressed_vectors(struct node best_frames[frames_total][3600]){
     FILE * frv = fopen("rvcompressed.bin", "w");
     FILE * fra = fopen("racompressed.bin", "w");
     struct node b;

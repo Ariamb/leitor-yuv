@@ -11,12 +11,12 @@
 #include <stdlib.h>
 #include <time.h>
 #include <mpi.h>
-#include <assert.h>
+
 
 // Creates an array of random numbers. Each number has a value from 0 - 1
 float *create_rand_nums(int num_elements) {
   float *rand_nums = (float *)malloc(sizeof(float) * num_elements);
-  assert(rand_nums != NULL);
+
   int i;
   for (i = 0; i < num_elements; i++) {
     rand_nums[i] = (rand() / (float)RAND_MAX);
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
   float *sub_avgs = NULL;
   if (world_rank == 0) {
     sub_avgs = (float *)malloc(sizeof(float) * world_size);
-    assert(sub_avgs != NULL);
+
   }
   MPI_Gather(&sub_avg, 1, MPI_FLOAT, sub_avgs, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
