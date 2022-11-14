@@ -4,11 +4,14 @@
 #include <omp.h>
 #include <mpi.h>
 
+int world_size, my_rank;
+
+
 #define frames_total 120
 #define width 640
 #define height 360
 #define video_name "video_converted_640x360.yuv"
-#define process_amount 2 //descobrir como pegar isso automaticamente
+#define process_amount world_size //descobrir como pegar isso automaticamente
 
 struct node {
   int diff;
@@ -47,7 +50,6 @@ void full_search(
 
 void write_frame(uint8_t frames[frames_total][height][width], struct node *best_frames);
 
-    int world_size, my_rank;
 
 
 int main(int argc, char * argv[]) {
@@ -62,6 +64,8 @@ int main(int argc, char * argv[]) {
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    printf("processos %d\n", world_size);
 
     printf("mpi rodando no processo: %d \n", my_rank);
 /*
@@ -89,7 +93,7 @@ int main(int argc, char * argv[]) {
                 );
             }
 
-        for (int f = 1; f < process_amount; f++){
+        for (int f = 1; f < world_size; f++){
             int target = f;
             printf("trying to send frame zero to proccess %d \n", f);
             MPI_Send(raw_frames[0], width * height, MPI_UINT8_T, target, 0, MPI_COMM_WORLD);
@@ -113,9 +117,9 @@ int main(int argc, char * argv[]) {
 
     printf("funfou até aqui \n");
 
-    uint8_t (*scattered_frames)[height][width] = calloc(frames_total / process_amount, sizeof(*scattered_frames));
-    MPI_Scatter(raw_frames, width * height * frames_total  / process_amount, MPI_UINT8_T, 
-                scattered_frames, width * height * frames_total  / process_amount, MPI_UINT8_T, 
+    uint8_t (*scattered_frames)[height][width] = calloc(frames_total / world_size, sizeof(*scattered_frames));
+    MPI_Scatter(raw_frames, width * height * frames_total  / world_size, MPI_UINT8_T, 
+                scattered_frames, width * height * frames_total  / world_size, MPI_UINT8_T, 
                 0, MPI_COMM_WORLD);
 
     //TODO: colocar essa aberração numa função
@@ -142,9 +146,9 @@ int main(int argc, char * argv[]) {
 
     //gatter
 
-    struct node (*best_frames)[3600] = calloc(frames_total / process_amount, sizeof(*best_frames));
+    struct node (*best_frames)[3600] = calloc(frames_total / world_size, sizeof(*best_frames));
 
-    for (int f = 0; f < frames_total / process_amount; f++){
+    for (int f = 0; f < frames_total / world_size; f++){
         full_search(scattered_frames, f, reference_frame, best_frames);
     }
 
@@ -158,8 +162,8 @@ int main(int argc, char * argv[]) {
 
     printf("finalizou todos os pedaços do vetor \n");
 
-    MPI_Gather(best_frames, 3600 * (frames_total / process_amount), node_type, 
-                all_best_frames, 3600 * (frames_total / process_amount), node_type, 0, MPI_COMM_WORLD);
+    MPI_Gather(best_frames, 3600 * (frames_total / world_size), node_type, 
+                all_best_frames, 3600 * (frames_total / world_size), node_type, 0, MPI_COMM_WORLD);
     
 
     if(my_rank == 0){
@@ -227,7 +231,7 @@ int compare_block(
     return diff;
 }
 
-void full_search(uint8_t frames[frames_total][height][width], int frame, uint8_t reference_frame[height][width], struct node best_block[frames_total / process_amount][3600]) {
+void full_search(uint8_t frames[frames_total][height][width], int frame, uint8_t reference_frame[height][width], struct node best_block[frames_total / world_size][3600]) {
 
     printf("comecei a executar o frame %d no processador %d \n", frame, my_rank);
      #pragma omp parallel for collapse(2)

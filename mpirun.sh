@@ -15,7 +15,7 @@ then
     fi
 
     echo "Executing"
-    mpirun --host localhost:2 --bind-to none ./main
+    mpirun --host localhost:10 --bind-to none ./main
 
     echo "Removing executable"
     rm main
