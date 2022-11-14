@@ -8,7 +8,7 @@
 #define width 640
 #define height 360
 #define video_name "video_converted_640x360.yuv"
-#define process_amount 1 //descobrir como pegar isso automaticamente
+#define process_amount 2 //descobrir como pegar isso automaticamente
 
 struct node {
   int diff;
@@ -50,8 +50,7 @@ void write_frame(uint8_t frames[frames_total][height][width], struct node *best_
     int world_size, my_rank;
 
 
-int main() {
-
+int main(int argc, char * argv[]) {
     double start, end;
     start = omp_get_wtime();
 
@@ -92,6 +91,7 @@ int main() {
 
         for (int f = 1; f < process_amount; f++){
             int target = f;
+            printf("trying to send frame zero to proccess %d \n", f);
             MPI_Send(raw_frames[0], width * height, MPI_UINT8_T, target, 0, MPI_COMM_WORLD);
             printf("sent frame 0 to target %d \n",  target);
         }
@@ -110,7 +110,7 @@ int main() {
         reference_frame = raw_frames[0];
     }
     
-    
+
     printf("funfou até aqui \n");
 
     uint8_t (*scattered_frames)[height][width] = calloc(frames_total / process_amount, sizeof(*scattered_frames));
@@ -142,21 +142,21 @@ int main() {
 
     //gatter
 
-    struct node (*best_frames)[3600] = calloc(frames_total / process_amount, sizeof(best_frames));
+    struct node (*best_frames)[3600] = calloc(frames_total / process_amount, sizeof(*best_frames));
 
-    for (int f = 0; f < 2; f++){
+    for (int f = 0; f < frames_total / process_amount; f++){
         full_search(scattered_frames, f, reference_frame, best_frames);
     }
 
-    //best_frames[frames_total / process_amount][3600];
-    //MPI_Gather(&aux, 1, person_type, recebidos, 1, person_type, 0, MPI_COMM_WORLD);
     
     struct node (*all_best_frames)[3600] = NULL;
     
     if(my_rank == 0){
-        all_best_frames = calloc(frames_total, sizeof(all_best_frames));
+        all_best_frames = calloc(frames_total, sizeof(*all_best_frames));
     }    
 
+
+    printf("finalizou todos os pedaços do vetor \n");
 
     MPI_Gather(best_frames, 3600 * (frames_total / process_amount), node_type, 
                 all_best_frames, 3600 * (frames_total / process_amount), node_type, 0, MPI_COMM_WORLD);
