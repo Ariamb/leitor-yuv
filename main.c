@@ -8,7 +8,7 @@
 #define width 640
 #define height 360
 #define video_name "video_converted_640x360.yuv"
-#define process_amount 2 //descobrir como pegar isso automaticamente
+#define process_amount 1 //descobrir como pegar isso automaticamente
 
 struct node {
   int diff;
@@ -38,7 +38,7 @@ void write_uncompressed_file(uint8_t frames[frames_total][height][width], struct
 
 void write_frame_zero(uint8_t frames[frames_total][height][width]);
 
-struct node * full_search(
+void full_search(
     uint8_t frames[frames_total][height][width], 
     int frame,
     uint8_t reference_frame[height][width],
@@ -46,6 +46,9 @@ struct node * full_search(
 );
 
 void write_frame(uint8_t frames[frames_total][height][width], struct node *best_frames);
+
+    int world_size, my_rank;
+
 
 int main() {
 
@@ -56,13 +59,12 @@ int main() {
 
     int frames_chunk = frames_total/num_threads;
 
-    int world_size, my_rank;
 
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-
+    printf("mpi rodando no processo: %d \n", my_rank);
 /*
     já que reclamaram do commit em inglês:
 
@@ -74,7 +76,8 @@ int main() {
     e de forma que o ranque 0 não fique a toa o tempo todo
 
 */
-    uint8_t (*raw_frames)[height][width];
+    uint8_t (*raw_frames)[height][width] = NULL;
+    uint8_t (*reference_frame)[width] = NULL;
     if(my_rank == 0){
         raw_frames = calloc(frames_total, sizeof(*raw_frames));
         #pragma omp parallel for 
@@ -87,16 +90,28 @@ int main() {
                 );
             }
 
-        for (int f = 0; f < process_amount; f++){
+        for (int f = 1; f < process_amount; f++){
             int target = f;
             MPI_Send(raw_frames[0], width * height, MPI_UINT8_T, target, 0, MPI_COMM_WORLD);
-            printf("sent frame 0 to target %d \n", target);
+            printf("sent frame 0 to target %d \n",  target);
         }
     }
 
-    uint8_t (*reference_frame)[height][width] = calloc(1, sizeof(reference_frame));
-    MPI_Status status;
-    MPI_Recv(reference_frame[0], width * height, MPI_UINT8_T, 0, 0, MPI_COMM_WORLD, &status);
+    
+    
+    if(my_rank != 0){
+        reference_frame = calloc(height, sizeof(*reference_frame));
+        MPI_Status status;
+        int ierr = MPI_Recv(reference_frame, width * height, MPI_UINT8_T, 0, 0, MPI_COMM_WORLD, &status);
+        if (ierr != MPI_SUCCESS){
+            printf("erro no envio no proccess %d \n", ierr);
+        }
+    } else {
+        reference_frame = raw_frames[0];
+    }
+    
+    
+    printf("funfou até aqui \n");
 
     uint8_t (*scattered_frames)[height][width] = calloc(frames_total / process_amount, sizeof(*scattered_frames));
     MPI_Scatter(raw_frames, width * height * frames_total  / process_amount, MPI_UINT8_T, 
@@ -129,14 +144,14 @@ int main() {
 
     struct node (*best_frames)[3600] = calloc(frames_total / process_amount, sizeof(best_frames));
 
-    for (int f = 0; f < frames_total / process_amount; f++){
+    for (int f = 0; f < 2; f++){
         full_search(scattered_frames, f, reference_frame, best_frames);
     }
 
     //best_frames[frames_total / process_amount][3600];
     //MPI_Gather(&aux, 1, person_type, recebidos, 1, person_type, 0, MPI_COMM_WORLD);
     
-    struct node (*all_best_frames)[3600];
+    struct node (*all_best_frames)[3600] = NULL;
     
     if(my_rank == 0){
         all_best_frames = calloc(frames_total, sizeof(all_best_frames));
@@ -212,9 +227,9 @@ int compare_block(
     return diff;
 }
 
-struct node * full_search(uint8_t frames[frames_total][height][width], int frame, uint8_t reference_frame[height][width], struct node best_block[frames_total / process_amount][3600]) {
+void full_search(uint8_t frames[frames_total][height][width], int frame, uint8_t reference_frame[height][width], struct node best_block[frames_total / process_amount][3600]) {
 
-    printf("comecei a executar o frame %d \n", frame);
+    printf("comecei a executar o frame %d no processador %d \n", frame, my_rank);
      #pragma omp parallel for collapse(2)
     for (int vertical = 0; vertical < 45; vertical++) {
         for (int horizontal = 0; horizontal < 80; horizontal++) {
@@ -238,7 +253,7 @@ struct node * full_search(uint8_t frames[frames_total][height][width], int frame
             best_block[frame][80 * vertical + horizontal] = local_block;
         }
     }
-    printf("terminei de executar o frame %d \n", frame);
+    printf("terminei de executar o frame %d no processador %d \n", frame, my_rank);
 }
 
 
