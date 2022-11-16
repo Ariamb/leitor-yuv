@@ -65,9 +65,8 @@ int main(int argc, char * argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    printf("processos %d\n", world_size);
 
-    printf("mpi rodando no processo: %d \n", my_rank);
+    
 /*
     já que reclamaram do commit em inglês:
 
@@ -114,8 +113,6 @@ int main(int argc, char * argv[]) {
         reference_frame = raw_frames[0];
     }
     
-
-    printf("funfou até aqui \n");
 
     uint8_t (*scattered_frames)[height][width] = calloc(frames_total / world_size, sizeof(*scattered_frames));
     MPI_Scatter(raw_frames, width * height * frames_total  / world_size, MPI_UINT8_T, 
