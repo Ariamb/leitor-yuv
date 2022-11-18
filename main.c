@@ -177,6 +177,9 @@ int main(int argc, char * argv[]) {
 
     
     free(raw_frames);
+    free(best_frames);
+    free(all_best_frames);
+    free(scattered_frames);
 
     end = omp_get_wtime();
     printf("execution time: %f \n", end-start);
