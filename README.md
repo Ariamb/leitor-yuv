@@ -6,8 +6,6 @@ Para compilar e executar rodar:
 
 <code>sh run.sh</code>
 
-(Paralelismo adicionado na leitura. Deixo para vocês escolherem qual das formas é pra usar)
-
 (requer arquivo "video_converted_640x360.yuv" no diretório)
 
 ## Especificação do trabalho
